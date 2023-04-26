@@ -28,3 +28,7 @@ class Preprocessor:
             lambda x: datetime.fromtimestamp(x).isoformat())
         self.comments.retrieved_on = self.comments.retrieved_on.apply(
             lambda x: datetime.fromtimestamp(x).isoformat())
+        self.comments.parent_id = self.comments.parent_id.transform(
+            lambda x: x[3:])
+        self.comments.link_id = self.comments.link_id.transform(
+            lambda x: x[3:])
