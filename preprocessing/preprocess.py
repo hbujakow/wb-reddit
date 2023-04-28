@@ -1,6 +1,18 @@
 import pandas as pd
 from datetime import datetime
 import copy
+import urllib.parse
+
+sites = [
+    "facebook",
+    "youtube",
+    "twitter",
+    "reddit",
+    "instagram",
+    "tumblr",
+    "imgur",
+    "other",
+]
 
 
 class Preprocessor:
@@ -13,6 +25,21 @@ class Preprocessor:
         self._fillna()
         self._transform()
         return self.posts, self.comments
+
+    @staticmethod
+    def _extract_domain(link):
+        parsed_link = urllib.parse.urlparse(link)
+        domain = parsed_link.netloc
+        if domain.startswith("www."):
+            domain = domain[4:]
+        return domain
+
+    @staticmethod
+    def _get_site(domain):
+        for site in sites:
+            if site in domain:
+                return site
+        return "other"
 
     def _drop(self):
         posts_copy = copy.deepcopy(self.posts)
@@ -60,4 +87,8 @@ class Preprocessor:
         )
         comments_copy.parent_id = comments_copy.parent_id.transform(lambda x: x[3:])
         comments_copy.link_id = comments_copy.link_id.transform(lambda x: x[3:])
+        posts_copy.url = posts_copy.url.apply(
+            lambda x: self._get_site(self._extract_domain(x))
+        )
+
         self.posts, self.comments = posts_copy, comments_copy
