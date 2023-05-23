@@ -1,5 +1,8 @@
 import pandas as pd
+from transformers import pipeline
+from datetime import datetime
 
+classifier = pipeline("text-classification", model="j-hartmann/emotion-english-distilroberta-base", return_all_scores=True)
 
 class Tree:
     def __init__(self, post_id, comments_df, posts_df) -> None:
@@ -51,7 +54,6 @@ class Tree:
             if child_comments:
                 self.print_comment_tree(child_comments, indent=indent + 4)
 
-
 class Transformer:
     def __init__(self, posts, comments) -> None:
         self.posts = posts
@@ -60,6 +62,38 @@ class Transformer:
     def run(self):
         self._createfeatures()
         return self.posts, self.comments
+    
+    def find_emotion(self, text):
+        classes = classifier(text)
+        element_with_highest_score = sorted(classes[0], key=lambda x: -x['score'])[:2]
+        return [x['label'] for x in element_with_highest_score]
+
+    def calculate_date_range(self, tree, comments_df):
+        def get_first_elements(tree):
+            return list(tree.keys())
+
+        def get_leaf_nodes(tree, leaves):
+            for key, value in tree.items():
+                if isinstance(value, dict) and len(value) > 0:
+                    get_leaf_nodes(value, leaves)
+                else:
+                    leaves.append(key)
+            return leaves
+
+        first_elements = get_first_elements(tree)
+        subset_df = comments_df[comments_df['id'].isin(first_elements)]
+        first_date = subset_df['created_utc'].min()
+
+        leaf_nodes = get_leaf_nodes(tree, [])
+        subset_df = comments_df[comments_df['id'].isin(leaf_nodes)]
+        last_date = subset_df['created_utc'].max()
+
+        date_format = '%Y-%m-%dT%H:%M:%S'
+        date1 = datetime.strptime(last_date, date_format)
+        date2 = datetime.strptime(first_date, date_format)
+        difference = (date1 - date2).total_seconds() / 3600
+
+        return difference
 
     def _createfeatures(self):
         posts_copy = self.posts.copy()
@@ -70,12 +104,16 @@ class Transformer:
         posts_copy["wiener_index"] = "unknown"
         posts_copy["depth"] = "unknown"
         posts_copy["no_comments"] = "unknown"
-
+        posts_copy["sentiment_post"] = posts_copy["selftext"].apply(lambda x: self.find_emotion(x) if x != '[no_text]' else 'no_sentiment')
+        posts_copy["sentiment_title"] = posts_copy["title"].apply(lambda x: self.find_emotion(x) if x != '[no_text]' else 'no_sentiment')
+        
         for idd in ids:
             tree = Tree(idd, comments_copy, posts_copy)
-
+               
             # update values
             posts_copy.loc[posts_copy.id == idd, "wiener_index"] = tree.wiener_index()
+            posts_copy.loc[posts_copy.id == idd, "post_duration"] = self.calculate_date_range(tree.structure, comments_copy)
             posts_copy.loc[posts_copy.id == idd, "depth"] = tree.depth()
             posts_copy.loc[posts_copy.id == idd, "no_comments"] = tree.how_many_nodes()
+  
         self.posts, self.comments = posts_copy, comments_copy
