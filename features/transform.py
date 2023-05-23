@@ -12,7 +12,10 @@ class Tree:
 
     def how_many_nodes(self):
         return len(self.comments_df)
-
+    
+    def how_many_controversial(self):
+        return self.comments_df['controversiality'].sum()
+    
     def wiener_index(self):
         comment_tree = self.structure
         n = len(comment_tree)
@@ -94,7 +97,7 @@ class Transformer:
         difference = (date1 - date2).total_seconds() / 3600
 
         return difference
-
+    
     def _createfeatures(self):
         posts_copy = self.posts.copy()
         comments_copy = self.comments.copy()
@@ -107,13 +110,16 @@ class Transformer:
         posts_copy["sentiment_post"] = posts_copy["selftext"].apply(lambda x: self.find_emotion(x) if x != '[no_text]' else 'no_sentiment')
         posts_copy["sentiment_title"] = posts_copy["title"].apply(lambda x: self.find_emotion(x) if x != '[no_text]' else 'no_sentiment')
         
+        
         for idd in ids:
             tree = Tree(idd, comments_copy, posts_copy)
-               
+            
             # update values
             posts_copy.loc[posts_copy.id == idd, "wiener_index"] = tree.wiener_index()
             posts_copy.loc[posts_copy.id == idd, "post_duration"] = self.calculate_date_range(tree.structure, comments_copy)
             posts_copy.loc[posts_copy.id == idd, "depth"] = tree.depth()
             posts_copy.loc[posts_copy.id == idd, "no_comments"] = tree.how_many_nodes()
+            posts_copy.loc[posts_copy.id == idd, "no_controversial"] = tree.how_many_controversial()
+            
   
         self.posts, self.comments = posts_copy, comments_copy
