@@ -102,6 +102,27 @@ class Transformer:
 
         return difference
 
+    def calculate_gini_coefficient(self, tree, comments_df):
+        def count_comments(tree, author_dict, comment_df):
+            for comment_id, children in tree.items():
+                author = comment_df.loc[comment_df['id'] == comment_id, 'author'].values
+                if len(author) > 0:
+                    author_dict[author[0]] = author_dict.get(author[0], 0) + 1
+                count_comments(children, author_dict, comment_df)
+
+        def gini(y):
+            sorted_y = sorted(y)
+            n = len(sorted_y)
+            summation = sum((2 * i - n - 1) * y_i for i, y_i in enumerate(sorted_y, start=1))
+            denominator = n * n * sum(sorted_y) / n
+            gini_coefficient = summation / denominator
+            return gini_coefficient
+
+        author_dict = {}
+        count_comments(tree, author_dict, comments_df)
+        numbers_only = [value for key, value in author_dict.items() if key != '[deleted]']
+        return gini(numbers_only)
+    
     def _createfeatures(self):
         posts_copy = self.posts.copy()
         comments_copy = self.comments.copy()
@@ -131,3 +152,14 @@ class Transformer:
                            "no_controversial"] = tree.how_many_controversial()
 
         self.posts, self.comments = posts_copy, comments_copy
+     
+    def _giniindex(self):
+        posts_copy = self.posts.copy()
+        comments_copy = self.comments.copy()
+        ids = posts_copy.id.values
+        for idd in ids:
+            tree = Tree(idd, comments_copy, posts_copy)
+            posts_copy.loc[posts_copy.id == idd, "gini_coefficient"] = self.calculate_gini_coefficient(
+                tree.structure, comments_copy)
+        self.posts, self.comments = posts_copy, comments_copy
+        return self.posts, self.comments
